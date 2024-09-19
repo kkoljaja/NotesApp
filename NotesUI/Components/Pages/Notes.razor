@@ -1,0 +1,157 @@
+﻿@page "/notes"
+@attribute [Authorize(Roles = "Administrator,User")]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using NotesAPI.Data
+@using NotesAPI.ViewModel
+@using NotesUI.Components.Services
+@inject NotesService notesService
+
+<PageTitle>Notes App - Notes</PageTitle>
+
+<h1 class="pb-3">Profil: @username</h1>
+
+<button class="btn btn-outline-primary" @onclick="OpenAddNewDialog">Dodaj novu bilješku</button>
+
+@if (showAddNewDialog)
+{
+    <div class="row">
+        <div class="col-lg-4 offset-lg-4 pt-4 pb-4 border bgdark">
+            <div class="mb-3 text-center">
+                <h3>Add new note:</h3>
+            </div>
+            <div class="mb-3">
+                <label>Note context</label>
+                <input @bind="tempNote.NoteContext" class="form-control" placeholder="Add new note" />
+            </div>
+            <div class="mb-3 d-grid gap-2">
+                <button @onclick="AddUpdate" class="btn btn-outline-primary">Done</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showEditDialog)
+{
+    <div class="row">
+        <div class="col-lg-4 offset-lg-4 pt-4 pb-4 border bgdark">
+            <div class="mb-3 text-center">
+                <h3>Edit note:</h3>
+            </div>
+            <div class="mb-3">
+                <label>Note context</label>
+                <input @bind="tempNote.NoteContext" class="form-control" placeholder="Edit note" />
+            </div>
+            <div class="mb-3 d-grid gap-2">
+                <button @onclick="EditUpdate" class="btn btn-outline-primary">Done</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (notes.Count() == 0)
+{
+    <h4>Trenutno nema bilješki!</h4>
+}
+else
+{
+    <div class="col-lg-8 offset-lg-2">
+        <table class="table table-striped table-bordered table-hover text-center">
+            <thead>
+                <tr>
+                    <th colspan="4">Bilješke:</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var note in notes)
+                {
+                    <tr>
+                        <td class="col-lg-7">@note.NoteContext</td>
+                        <td class="col-lg-1"><input type="checkbox" @bind="note.IsDone" @onclick="() => UpdateNotes(note)" /></td>
+                        <td class="col-lg-2"><button class="btn btn-outline-warning" @onclick="() => OpenEditDialog(note)">Update</button></td>
+                        <td class="col-lg-2"><button class="btn btn-outline-danger" @onclick="() => DeleteNote(note.Id)">Delete</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> authenticationState { get; set; }
+    private string username { get; set; }
+    private List<Note> notes = new List<Note>();
+    private bool showAddNewDialog { get; set; }
+    private bool showEditDialog { get; set; }
+    private Note tempNote = new Note();
+
+    protected override async void OnInitialized()
+    {
+        var authState = await authenticationState;
+        username = authState.User.Identity.Name;
+        showAddNewDialog = false;
+        showEditDialog = false;
+        tempNote.UserName = username;
+
+        GetNotes();
+        StateHasChanged();
+        base.OnInitialized();
+    }
+
+    public async void AddUpdate()
+    {
+        await notesService.AddNote(tempNote);
+        showAddNewDialog = false;
+        GetNotes();
+        StateHasChanged();
+    }
+
+    public void OpenAddNewDialog()
+    {
+        tempNote.NoteContext = string.Empty;
+        showAddNewDialog = true;
+        showEditDialog = false;
+        StateHasChanged();
+    }
+
+    public async void EditUpdate()
+    {
+        await notesService.UpdateNote(tempNote.Id, tempNote);
+        showEditDialog = false;
+        GetNotes();
+        StateHasChanged();
+    }
+
+    public void OpenEditDialog(Note note)
+    {
+        tempNote.Id = note.Id;
+        tempNote.NoteContext = note.NoteContext;
+        showAddNewDialog = false;
+        showEditDialog = true;
+        StateHasChanged();
+    }
+
+    private async void GetNotes()
+    {
+        notes = await notesService.GetUserNotes(username);
+        StateHasChanged();
+    }
+
+    public async void UpdateNotes(Note note)
+    {
+        Note newNote = new Note
+        {
+            UserName = note.UserName,
+            NoteContext = note.NoteContext,
+            IsDone = !note.IsDone
+        };
+        await notesService.UpdateNote(note.Id, newNote);
+    }
+
+    public async void DeleteNote(int id)
+    {
+        await notesService.RemoveNote(id);
+        notes = await notesService.GetUserNotes(username);
+        StateHasChanged();
+    }
+}
